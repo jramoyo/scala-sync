@@ -8,6 +8,9 @@ import com.jcraft.jsch.ChannelSftp
 import com.jcraft.jsch.JSch
 import com.jcraft.jsch.Session
 
+/**
+ * Syncs files between a local and remote directory
+ */
 class Sync(jSch: JSch, auth: Auth, localDir: String, remoteDir: String) {
 
   val session: Session = jSch.getSession(auth.username, auth.host)
@@ -17,6 +20,9 @@ class Sync(jSch: JSch, auth: Auth, localDir: String, remoteDir: String) {
   val channel = session.openChannel("sftp").asInstanceOf[ChannelSftp]
   channel.connect()
 
+  /**
+   * Starts the sync
+   */
   def start() = {
     val filesToAdd = toAdd(localFiles, remoteFiles);
     val filesToDelete = toDelete(localFiles, remoteFiles);
@@ -29,11 +35,11 @@ class Sync(jSch: JSch, auth: Auth, localDir: String, remoteDir: String) {
 
     filesToAdd.foreach(fileInfo => {
       // from : List(a, b, c, d)
-      // to   : List(List(a), List(a, b), List(a, b, c), List(a, b, c, d))
-      val targetDirs = (remoteDir :: fileInfo.parents.tail).inits.toList.reverse.tail
+      // to   : List(List(a), List(a/b), List(a/b/c), List(a/b/c/d))
+      val targetDirs = (remoteDir :: fileInfo.parents.tail).inits.toList.reverse.tail.map(_.mkString("/"))
       targetDirs.foreach(dir => {
         try {
-          channel.mkdir(dir.mkString("/"))
+          channel.mkdir(dir)
         } catch {
           case e: Exception => println("Directory '%s' already exists".format(dir))
         }
@@ -50,6 +56,9 @@ class Sync(jSch: JSch, auth: Auth, localDir: String, remoteDir: String) {
     }
   }
 
+  /**
+   * Disconnects the connections
+   */
   def stop = {
     channel.exit();
     session.disconnect();
@@ -63,6 +72,9 @@ class Sync(jSch: JSch, auth: Auth, localDir: String, remoteDir: String) {
     targetFiles.filter(fileInfo => !srcFiles.contains(fileInfo))
   }
 
+  /**
+   * Returns a list of local files
+   */
   def localFiles(): List[FileInfo] = {
     val dir = _locaDir
     if (dir.isDirectory()) {
@@ -78,6 +90,9 @@ class Sync(jSch: JSch, auth: Auth, localDir: String, remoteDir: String) {
     new File(localDir)
   }
 
+  /**
+   * Returns a list of remote files
+   */
   def remoteFiles(): List[FileInfo] = {
     try {
       val dirEntries = channel.ls(remoteDir).asScala.toList
@@ -136,6 +151,9 @@ class Sync(jSch: JSch, auth: Auth, localDir: String, remoteDir: String) {
   }
 }
 
+/**
+ * Holder for authentication data
+ */
 class Auth(val host: String, val username: String, val password: String)
 
 object Auth {
@@ -144,6 +162,9 @@ object Auth {
   }
 }
 
+/**
+ * Represents information about a file
+ */
 class FileInfo(root: String, val parents: List[String], val name: String, val size: Long) extends Equals {
   def path = {
     if (parents.isEmpty || (parents.size == 1 && parents(0) == root)) {
